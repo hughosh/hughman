@@ -56,6 +56,20 @@
     }
     .overlay-l { left: 18px; }
     .overlay-r { right: 18px; }
+
+    /* Narrow viewports: stack the tagline + nav vertically, both centered,
+       so they don't overlap on phone-width screens. */
+    @media (max-width: 600px) {
+      .overlay-l, .overlay-r {
+        left: 0;
+        right: 0;
+        text-align: center;
+      }
+      .overlay-l { bottom: 38px; }
+      .overlay-r { bottom: 14px; }
+      .overlay-r a { margin: 0 8px; }
+      .overlay-r a:first-child { margin-left: 8px; }
+    }
     .overlay-r a {
       color: inherit;
       text-decoration: none;

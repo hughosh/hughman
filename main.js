@@ -138,34 +138,43 @@ function buildMask(cols, rows) {
   ctx.textAlign = "left";
 
   const letters = WORD.split("");
-  const targetWordW = W * WORD_TARGET_WIDTH;
-  const maxSize = Math.floor(H * WORD_VERTICAL_FILL);
+  // On narrow (portrait) viewports the single horizontal row leaves HUGH
+  // tiny and most of the screen blank. Switch to a 2×2 grid so each letter
+  // gets roughly 3× the area.
+  const portrait = W / H < 0.85;
+  const layout = portrait
+    ? { cols: 2, rows: 2, slots: [[0, 0], [1, 0], [0, 1], [1, 1]] }
+    : { cols: letters.length, rows: 1, slots: letters.map((_, i) => [i, 0]) };
 
-  // Pick a font size so (sum of letter widths + (n-1) gaps) ≈ targetWordW.
-  let size = Math.min(maxSize, Math.floor(H * 0.7));
+  const slotW = W / layout.cols;
+  const slotH = H / layout.rows;
+  const targetLetterW = slotW * WORD_TARGET_WIDTH;
+  const maxSize = Math.floor(slotH * WORD_VERTICAL_FILL);
+  const gapFrac = WORD_LETTER_SPACING; // applied between letters within a row
+
+  // Pick a font size so each letter fills ~targetLetterW horizontally without
+  // exceeding maxSize vertically. Iterate to converge.
+  let size = Math.min(maxSize, Math.floor(slotH * 0.8));
   let widths = [];
   for (let iter = 0; iter < 4; iter++) {
     ctx.font = WORD_FONT.replace("SCALE", size);
     widths = letters.map((l) => ctx.measureText(l).width);
-    const sumW = widths.reduce((a, b) => a + b, 0);
-    const meanW = sumW / letters.length;
-    const gap = WORD_LETTER_SPACING * meanW;
-    const totalW = sumW + (letters.length - 1) * gap;
-    if (totalW <= 0) break;
-    const ratio = targetWordW / totalW;
+    const meanW = widths.reduce((a, b) => a + b, 0) / widths.length;
+    if (meanW <= 0) break;
+    // Effective per-letter advance includes a slice of the gap.
+    const advance = meanW * (1 + gapFrac);
+    const ratio = targetLetterW / advance;
     if (Math.abs(ratio - 1) < 0.02) break;
     size = Math.max(8, Math.min(maxSize, Math.round(size * ratio)));
   }
   ctx.font = WORD_FONT.replace("SCALE", size);
   widths = letters.map((l) => ctx.measureText(l).width);
 
-  const sumW = widths.reduce((a, b) => a + b, 0);
-  const gap = WORD_LETTER_SPACING * (sumW / letters.length);
-  const totalW = sumW + (letters.length - 1) * gap;
-  let x = (W - totalW) / 2;
   for (let i = 0; i < letters.length; i++) {
-    ctx.fillText(letters[i], x, H / 2);
-    x += widths[i] + gap;
+    const [col, row] = layout.slots[i];
+    const x = (col + 0.5) * slotW - widths[i] / 2;
+    const y = (row + 0.5) * slotH;
+    ctx.fillText(letters[i], x, y);
   }
 
   // Downsample by averaging alpha over each cell's [cellW × cellH] block.
