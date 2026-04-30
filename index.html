@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Hugh</title>
+  <link rel="icon" href="data:,">
+
+  <style>
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      background: #000;
+      color: #fff;
+      font: 12px Georgia, Palatino, "Times New Roman", serif;
+      overflow: hidden;
+    }
+
+    #art {
+      position: fixed;
+      inset: 0;
+    }
+    .r {
+      white-space: pre;
+      overflow: hidden;
+      height: 14px;
+      line-height: 14px;
+    }
+    .w3 { font-weight: 300; }
+    .w5 { font-weight: 500; }
+    .w8 { font-weight: 800; }
+    .it { font-style: italic; }
+
+    /* Neon-pink ramp: dimmest stops shift toward magenta (255,60,180);
+       brightest stops are hot pink (255,20,147). Linear blend in between. */
+    .a1  { color: rgba(255, 60, 180, 0.08); }
+    .a2  { color: rgba(255, 56, 176, 0.16); }
+    .a3  { color: rgba(255, 51, 173, 0.24); }
+    .a4  { color: rgba(255, 47, 169, 0.32); }
+    .a5  { color: rgba(255, 42, 165, 0.42); }
+    .a6  { color: rgba(255, 38, 162, 0.54); }
+    .a7  { color: rgba(255, 33, 158, 0.66); }
+    .a8  { color: rgba(255, 29, 154, 0.78); }
+    .a9  { color: rgba(255, 24, 151, 0.90); }
+    .a10 { color: rgba(255, 20, 147, 1.00); }
+    .a8, .a9, .a10 { text-shadow: 0 0 6px rgba(255, 20, 147, 0.6); }
+
+    .overlay {
+      position: fixed;
+      bottom: 18px;
+      font: 11px/1 ui-sans-serif, system-ui, "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(255, 20, 147, 0.55);
+      pointer-events: auto;
+    }
+    .overlay-l { left: 18px; }
+    .overlay-r { right: 18px; }
+    .overlay-r a {
+      color: inherit;
+      text-decoration: none;
+      margin-left: 14px;
+      transition: color 120ms ease;
+    }
+    .overlay-r a:first-child { margin-left: 0; }
+    .overlay-r a:hover { color: rgb(255, 20, 147); }
+
+    #stats {
+      position: fixed;
+      bottom: 6px;
+      left: 6px;
+      font: 10px/1 ui-sans-serif, system-ui, sans-serif;
+      color: rgba(255, 255, 255, 0.18);
+      letter-spacing: 0.04em;
+    }
+
+    /* About / Contact panels — hidden until their nav link is clicked */
+    .panel {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.72);
+      backdrop-filter: blur(2px);
+      z-index: 50;
+    }
+    .panel.open { display: flex; }
+    .panel-card {
+      max-width: 460px;
+      padding: 28px 32px;
+      border: 1px solid rgba(255, 20, 147, 0.35);
+      background: rgba(10, 0, 6, 0.92);
+      color: rgba(255, 220, 235, 0.92);
+      font: 13px/1.55 ui-sans-serif, system-ui, "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      letter-spacing: 0.02em;
+    }
+    .panel-card h2 {
+      margin: 0 0 14px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: rgb(255, 20, 147);
+    }
+    .panel-card p { margin: 0 0 12px; }
+    .panel-card a {
+      color: rgb(255, 20, 147);
+      text-decoration: none;
+      border-bottom: 1px solid rgba(255, 20, 147, 0.4);
+    }
+    .panel-card a:hover { border-bottom-color: rgb(255, 20, 147); }
+    .panel-card .row { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 8px; }
+    .panel-card .row .label {
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: rgba(255, 20, 147, 0.55);
+    }
+    .panel-close {
+      position: absolute;
+      top: 18px;
+      right: 22px;
+      background: none;
+      border: none;
+      color: rgba(255, 20, 147, 0.6);
+      font: 14px/1 ui-sans-serif, system-ui, sans-serif;
+      letter-spacing: 0.18em;
+      cursor: pointer;
+      text-transform: uppercase;
+    }
+    .panel-close:hover { color: rgb(255, 20, 147); }
+  </style>
+</head>
+<body>
+  <div id="art"></div>
+  <div id="stats" hidden></div>
+
+  <div class="overlay overlay-l">Hugh &mdash; cs @ uw&ndash;madison</div>
+
+  <nav class="overlay overlay-r">
+    <a href="#about" data-panel="about">about</a>
+    <a href="#contact" data-panel="contact">contact</a>
+    <a href="https://github.com/hughosh" target="_blank" rel="noopener">github</a>
+    <a href="https://www.linkedin.com/in/hugh-o-shaughnessy-a440b2231" target="_blank" rel="noopener">linkedin</a>
+  </nav>
+
+  <div class="panel" id="panel-about" role="dialog" aria-label="About">
+    <button class="panel-close" data-close>close ✕</button>
+    <div class="panel-card">
+      <h2>About</h2>
+      <p>Hugh O&rsquo;Shaughnessy &mdash; senior CS at UW&ndash;Madison, based in Mountain View, California.</p>
+      <p>Trying to be clever. Interested in elegant solutions for optimization at all levels. Open to opportunities.</p>
+      <p style="margin-top:18px">
+        <a href="https://hughman.contact/hughosh_resume_2026.pdf" target="_blank" rel="noopener">open résumé ↗</a>
+      </p>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-contact" role="dialog" aria-label="Contact">
+    <button class="panel-close" data-close>close ✕</button>
+    <div class="panel-card">
+      <h2>Contact</h2>
+      <div class="row">
+        <span class="label">email</span>
+        <a href="mailto:hughoshaugh@gmail.com">hughoshaugh@gmail.com</a>
+      </div>
+      <div class="row">
+        <span class="label">phone</span>
+        <a href="tel:+16506257191">(650) 625-7191</a>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./main.js"></script>
+  <script>
+    // Panel toggle: nav links with data-panel open the matching #panel-<name>;
+    // backdrop click, close button, or Esc dismiss it.
+    const panels = document.querySelectorAll(".panel");
+    function closeAll() { panels.forEach((p) => p.classList.remove("open")); }
+    document.querySelectorAll("[data-panel]").forEach((a) => {
+      a.addEventListener("click", (e) => {
+        e.preventDefault();
+        const name = a.dataset.panel;
+        closeAll();
+        document.getElementById("panel-" + name)?.classList.add("open");
+      });
+    });
+    panels.forEach((p) => {
+      p.addEventListener("click", (e) => { if (e.target === p) closeAll(); });
+      p.querySelector("[data-close]")?.addEventListener("click", closeAll);
+    });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAll(); });
+  </script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "hughman",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "vendor": "esbuild node_modules/@chenglou/pretext/dist/layout.js --bundle --format=esm --outfile=vendor/pretext.js",
+    "serve": "python3 -m http.server 8000"
+  },
+  "devDependencies": {
+    "@chenglou/pretext": "^0.0.6",
+    "esbuild": "^0.24.0"
+  }
+}
