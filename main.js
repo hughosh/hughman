@@ -401,8 +401,12 @@ function initGrid() {
 }
 
 // ── boot ─────────────────────────────────────────────────────────────────────
+// Note: we previously gated this on prefers-reduced-motion and rendered a
+// single still frame for users with that setting, but the simulation is
+// input-driven now (no auto-cycling), so idle motion is already minimal —
+// just gentle emitter wisps. Always run the loop so iOS users with
+// "Reduce Motion" enabled still see the smoke evolve.
 const startTime = performance.now();
-const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 await document.fonts.ready;
 buildPalette();
@@ -419,15 +423,10 @@ window.addEventListener("resize", () => {
   }, 150);
 });
 
-if (reduceMotion) {
-  // Render a single still frame: build a smoke field, then let the attractor
-  // settle into the letterform before painting once.
-  for (let i = 0; i < 80; i++) stepSim(i * 0.05, 0);
-  for (let i = 0; i < 60; i++) stepSim((80 + i) * 0.05, 1);
-  render(performance.now(), 0);
-} else {
+{
   // FPS adaptation: 60-frame rolling mean of frame deltas.
-  // If sustained sub-30fps for 2s, halve grid resolution once.
+  // Conservative thresholds (see below) so a desktop browser at the larger
+  // grid doesn't trip it; only genuinely slow devices halve down.
   const FRAME_WINDOW = 60;
   const frameDeltas = [];
   let lastFrameTime = startTime;
