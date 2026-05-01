@@ -105,16 +105,24 @@ function findBest(targetB, targetW) {
   return best;
 }
 
-function esc(c) {
-  if (c === "&") return "&amp;";
-  if (c === "<") return "&lt;";
-  if (c === ">") return "&gt;";
-  return c;
-}
-
-function wCls(w, s) {
-  const wc = w === 300 ? "w3" : w === 500 ? "w5" : "w8";
-  return s === "italic" ? wc + " it" : wc;
+// Precomputed className strings — 3 weights × 2 styles × 10 alpha buckets = 60.
+// Render reads from this table so the inner loop never builds new strings.
+const CLS_CACHE = new Array(2 * 3 * 11);
+(function fillClassCache() {
+  for (let italic = 0; italic < 2; italic++) {
+    for (let widx = 0; widx < 3; widx++) {
+      const wc = widx === 0 ? "w3" : widx === 1 ? "w5" : "w8";
+      const it = italic ? " it" : "";
+      for (let ai = 1; ai <= 10; ai++) {
+        CLS_CACHE[(italic * 3 + widx) * 11 + ai] = wc + it + " a" + ai;
+      }
+    }
+  }
+})();
+function classFor(weight, style, ai) {
+  const widx = weight === 300 ? 0 : weight === 500 ? 1 : 2;
+  const italic = style === "italic" ? 1 : 0;
+  return CLS_CACHE[(italic * 3 + widx) * 11 + ai];
 }
 
 // ── letterform mask ──────────────────────────────────────────────────────────
@@ -260,40 +268,42 @@ const emitters = [
 ];
 
 const IMPULSE_R2 = IMPULSE_RADIUS_CELLS * IMPULSE_RADIUS_CELLS;
-function getVel(c, r, t) {
-  const nx = c / COLS, ny = r / ROWS;
-  let vx = Math.sin(ny * 6.28 + t * 0.3) * 2
-         + Math.cos((nx + ny) * 12.5 + t * 0.55) * 0.7
-         + Math.sin(nx * 25 + ny * 18 + t * 0.8) * 0.25;
-  let vy = Math.cos(nx * 5 + t * 0.4) * 1.5
-         + Math.sin((nx - ny) * 10 + t * 0.4) * 0.8
-         + Math.cos(nx * 18 - ny * 25 + t * 0.7) * 0.25;
-  vy *= aspect;
-  // Mouse impulse: gaussian falloff around pointer cell, scales the recent
-  // pointer velocity so smoke advects in the direction the mouse is moving.
-  if (impulse.vx !== 0 || impulse.vy !== 0) {
-    const dc = c - impulse.c;
-    const dr = (r - impulse.r) / aspect;
-    const d2 = dc * dc + dr * dr;
-    if (d2 < IMPULSE_R2 * 4) {
-      const fall = Math.exp(-d2 / IMPULSE_R2);
-      vx += impulse.vx * IMPULSE_STRENGTH * fall;
-      vy += impulse.vy * IMPULSE_STRENGTH * fall * aspect;
-    }
-  }
-  return [vx, vy];
-}
 
 function stepSim(t, f) {
-  // Advect: semi-Lagrangian backtrace + bilinear sample.
+  // Advect: semi-Lagrangian backtrace + bilinear sample. Velocity field is
+  // inlined here (was getVel) so we don't allocate [vx, vy] per cell — that
+  // was ~12k arrays/frame at the larger grid.
+  const colsM = COLS - 1.001;
+  const rowsM = ROWS - 1.001;
+  const impVx = impulse.vx, impVy = impulse.vy;
+  const impC = impulse.c, impR = impulse.r;
+  const impulseActive = impVx !== 0 || impVy !== 0;
   for (let r = 0; r < ROWS; r++) {
+    const ny = r / ROWS;
     for (let c = 0; c < COLS; c++) {
-      const [vx, vy] = getVel(c, r, t);
-      const sx = Math.max(0, Math.min(COLS - 1.001, c - vx));
-      const sy = Math.max(0, Math.min(ROWS - 1.001, r - vy));
+      const nx = c / COLS;
+      let vx = Math.sin(ny * 6.28 + t * 0.3) * 2
+             + Math.cos((nx + ny) * 12.5 + t * 0.55) * 0.7
+             + Math.sin(nx * 25 + ny * 18 + t * 0.8) * 0.25;
+      let vy = Math.cos(nx * 5 + t * 0.4) * 1.5
+             + Math.sin((nx - ny) * 10 + t * 0.4) * 0.8
+             + Math.cos(nx * 18 - ny * 25 + t * 0.7) * 0.25;
+      vy *= aspect;
+      if (impulseActive) {
+        const dc = c - impC;
+        const dr = (r - impR) / aspect;
+        const d2 = dc * dc + dr * dr;
+        if (d2 < IMPULSE_R2 * 4) {
+          const fall = Math.exp(-d2 / IMPULSE_R2);
+          vx += impVx * IMPULSE_STRENGTH * fall;
+          vy += impVy * IMPULSE_STRENGTH * fall * aspect;
+        }
+      }
+      const sx = vx > c ? 0 : vx < c - colsM ? colsM : c - vx;
+      const sy = vy > r ? 0 : vy < r - rowsM ? rowsM : r - vy;
       const x0 = sx | 0, y0 = sy | 0;
-      const x1 = Math.min(x0 + 1, COLS - 1);
-      const y1 = Math.min(y0 + 1, ROWS - 1);
+      const x1 = x0 + 1 < COLS ? x0 + 1 : COLS - 1;
+      const y1 = y0 + 1 < ROWS ? y0 + 1 : ROWS - 1;
       const fx = sx - x0, fy = sy - y0;
       tempDen[r * COLS + c] =
         density[y0 * COLS + x0] * (1 - fx) * (1 - fy) +
@@ -302,7 +312,7 @@ function stepSim(t, f) {
         density[y1 * COLS + x1] * fx * fy;
     }
   }
-  [density, tempDen] = [tempDen, density];
+  let _swap = density; density = tempDen; tempDen = _swap;
 
   // Diffuse: one Jacobi pass with aspect-corrected vertical neighbors.
   for (let r = 1; r < ROWS - 1; r++) {
@@ -314,7 +324,7 @@ function stepSim(t, f) {
       tempDen[i] = density[i] * 0.92 + avg * 0.08;
     }
   }
-  [density, tempDen] = [tempDen, density];
+  _swap = density; density = tempDen; tempDen = _swap;
 
   // Emit: orbital sources. Damped while letters are formed (low activity),
   // full strength while dispersed — keeps idle scene clean, dispersal smoky.
@@ -351,51 +361,85 @@ function stepSim(t, f) {
 }
 
 // ── render ───────────────────────────────────────────────────────────────────
-// Centering uses a fixed canvasW = COLS · avgCharW (set once per initGrid).
-// That keeps each row's center anchored regardless of how its content varies
-// across frames; using max(rowWidths) instead caused the whole grid to reflow
-// horizontally whenever density (and therefore character widths) shifted.
+// Persistent spans: COLS × ROWS span elements are created once per initGrid.
+// Each frame mutates only the spans whose char or class actually changed.
+// This eliminates the previous innerHTML rebuild (~12k spans parsed per frame)
+// which was the root cause of unbounded browser-side memory growth: detached
+// nodes, paint records, and compositor layers were piling up faster than they
+// could be reclaimed.
+//
+// Centering still uses a fixed canvasW = COLS · avgCharW so each row stays
+// anchored regardless of per-frame width fluctuations.
+const rowSpans = []; // [r] -> Array<HTMLSpanElement>
 function render(now, t) {
   const tcw = window.innerWidth / COLS;
-  const rowWidths = new Array(ROWS);
+  let rowSumWidths = rowWidthsBuf;
   for (let r = 0; r < ROWS; r++) {
-    let html = "", tw = 0;
+    const spans = rowSpans[r];
+    let tw = 0;
     for (let c = 0; c < COLS; c++) {
+      const span = spans[c];
       const b = density[r * COLS + c];
+      let ch, cls, w;
       if (b < 0.025) {
-        html += " ";
-        tw += spaceW;
+        ch = " ";
+        cls = "";
+        w = spaceW;
       } else {
         const m = findBest(b, tcw);
-        const ai = Math.max(1, Math.min(10, Math.round(b * 10)));
-        html += `<span class="${wCls(m.weight, m.style)} a${ai}">${esc(m.char)}</span>`;
-        tw += m.width;
+        const ai = b >= 1 ? 10 : b <= 0.05 ? 1 : Math.round(b * 10) || 1;
+        ch = m.char;
+        cls = classFor(m.weight, m.style, ai);
+        w = m.width;
       }
+      if (span._char !== ch) {
+        span.firstChild.data = ch; // direct text node mutation, no Text-node churn
+        span._char = ch;
+      }
+      if (span._cls !== cls) {
+        span.className = cls;
+        span._cls = cls;
+      }
+      tw += w;
     }
-    rowEls[r].innerHTML = html;
-    rowWidths[r] = tw;
+    rowSumWidths[r] = tw;
   }
   const blockOffset = Math.max(0, (window.innerWidth - canvasW) / 2);
   for (let r = 0; r < ROWS; r++) {
-    rowEls[r].style.paddingLeft = blockOffset + (canvasW - rowWidths[r]) / 2 + "px";
+    rowEls[r].style.paddingLeft = blockOffset + (canvasW - rowSumWidths[r]) / 2 + "px";
   }
 }
 
 // ── grid init ────────────────────────────────────────────────────────────────
 let canvasW = 0;
+let rowWidthsBuf = new Float32Array(0);
 function initGrid() {
   COLS = Math.min(MAX_COLS, Math.max(8, Math.floor(window.innerWidth / avgCharW)));
   ROWS = Math.min(MAX_ROWS, Math.max(4, Math.floor(window.innerHeight / LINE_HEIGHT)));
   canvasW = COLS * avgCharW;
   density = new Float32Array(COLS * ROWS);
   tempDen = new Float32Array(COLS * ROWS);
-  artEl.innerHTML = "";
+  rowWidthsBuf = new Float32Array(ROWS);
+  artEl.textContent = ""; // clears children without HTML parsing
   rowEls.length = 0;
+  rowSpans.length = 0;
   for (let r = 0; r < ROWS; r++) {
     const div = document.createElement("div");
     div.className = "r";
     artEl.appendChild(div);
     rowEls.push(div);
+    const spans = new Array(COLS);
+    for (let c = 0; c < COLS; c++) {
+      const span = document.createElement("span");
+      // Seed each span with a Text node so render() can mutate .firstChild.data
+      // (cheap) instead of reassigning textContent (which churns Text nodes).
+      span.appendChild(document.createTextNode(" "));
+      span._char = " ";
+      span._cls = "";
+      div.appendChild(span);
+      spans[c] = span;
+    }
+    rowSpans.push(spans);
   }
   mask = buildMask(COLS, ROWS);
 }
